@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: capvault-postgres
+    environment:
+      POSTGRES_DB: capvault
+      POSTGRES_USER: capvault
+      POSTGRES_PASSWORD: capvault
+    ports:
+      - "5432:5432"
+    volumes:
+      - capvault_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U capvault -d capvault"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  capvault_postgres:

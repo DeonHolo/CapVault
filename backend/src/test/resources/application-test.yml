@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:capvault;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+  flyway:
+    enabled: false
+
+capvault:
+  seed:
+    enabled: false
+  institutional-domain: cit.edu
+  storage:
+    provider: local
+    local-root: target/test-storage
