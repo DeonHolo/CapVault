@@ -37,6 +37,16 @@ public final class CapVaultDtos {
     ) {
     }
 
+    public record StudentVerificationRequest(@NotBlank String studentNumber) {
+    }
+
+    public record StudentVerificationDto(
+            UserDto user,
+            GroupDto group,
+            String message
+    ) {
+    }
+
     public record GroupMemberDto(
             Long id,
             String studentNumber,
@@ -119,6 +129,14 @@ public final class CapVaultDtos {
             String rawHeaders,
             Instant startedAt,
             Instant completedAt,
+            String message
+    ) {
+    }
+
+    public record ClassRecordResetDto(
+            long trackerRowsCleared,
+            long importRecordsCleared,
+            long importedDeadlinesCleared,
             String message
     ) {
     }

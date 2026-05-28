@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Archive, CheckCircle } from '@phosphor-icons/react';
+import { Archive, CheckCircle, DownloadSimple, Eye } from '@phosphor-icons/react';
 import { PageHeader } from '../components/common/PageHeader.jsx';
 import { LoadingState, ErrorState, EmptyState } from '../components/common/DataState.jsx';
 import { Button } from '../components/common/Button.jsx';
@@ -8,7 +8,7 @@ import { StatusPill } from '../components/common/StatusPill.jsx';
 import { TableShell } from '../components/common/TableShell.jsx';
 import { useApiResource } from '../hooks/useApiResource.js';
 import { useCurrentUser } from '../hooks/useCurrentUser.js';
-import { apiRequest } from '../lib/api.js';
+import { apiRequest, downloadProtectedFile, openProtectedFile } from '../lib/api.js';
 import { SUBMISSION_STATUSES } from '../lib/constants.js';
 import { compactBytes, formatDateTime, labelStatus } from '../lib/format.js';
 
@@ -96,7 +96,8 @@ export function ReviewPage() {
                   { key: 'file', label: 'File' },
                   { key: 'size', label: 'Size' },
                   { key: 'hash', label: 'SHA-256' },
-                  { key: 'date', label: 'Date' }
+                  { key: 'date', label: 'Date' },
+                  { key: 'actions', label: 'Actions' }
                 ]}
                 rows={selected.versions}
                 renderRow={(version) => (
@@ -106,9 +107,19 @@ export function ReviewPage() {
                     <td>{compactBytes(version.sizeBytes)}</td>
                     <td className="hash-cell">{version.sha256}</td>
                     <td>{formatDateTime(version.createdAt)}</td>
+                    <td>
+                      <div className="table-actions">
+                        <Button size="sm" variant="secondary" icon={Eye} onClick={() => openProtectedFile(`/api/submissions/versions/${version.id}/download`)}>View</Button>
+                        <Button size="sm" variant="secondary" icon={DownloadSimple} onClick={() => downloadProtectedFile(`/api/submissions/versions/${version.id}/download`, version.filename)}>Download</Button>
+                      </div>
+                    </td>
                   </tr>
                 )}
               />
+              <div className="communication-grid">
+                <div><span>Student submission note</span><p>{selected.notes || 'No note included.'}</p></div>
+                <div><span>Saved adviser remarks</span><p>{selected.adviserRemarks || 'No adviser remarks yet.'}</p></div>
+              </div>
               <form className="form-grid" onSubmit={saveReview}>
                 <FormField label="Version to review">
                   <select value={review.documentVersionId} onChange={(event) => setReview({ ...review, documentVersionId: event.target.value })}>
@@ -125,7 +136,7 @@ export function ReviewPage() {
                   <textarea value={review.remarks} onChange={(event) => { setReview({ ...review, remarks: event.target.value }); setReviewError(null); }} />
                 </FormField>
                 <div className="button-row">
-                  {currentUser.role === 'ADVISER' ? <Button icon={CheckCircle}>Save review</Button> : null}
+                  {['ADMIN', 'ADVISER'].includes(currentUser.role) ? <Button icon={CheckCircle}>Save review</Button> : null}
                   <Button type="button" variant="secondary" icon={Archive} disabled={!selectedVersion || !['APPROVED', 'FINAL'].includes(selected.status)} onClick={archiveSelected}>Archive selected version</Button>
                 </div>
               </form>

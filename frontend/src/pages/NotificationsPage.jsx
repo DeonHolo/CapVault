@@ -2,7 +2,6 @@ import { CheckCircle } from '@phosphor-icons/react';
 import { PageHeader } from '../components/common/PageHeader.jsx';
 import { Button } from '../components/common/Button.jsx';
 import { LoadingState, ErrorState, EmptyState } from '../components/common/DataState.jsx';
-import { StatusPill } from '../components/common/StatusPill.jsx';
 import { useApiResource } from '../hooks/useApiResource.js';
 import { useCurrentUser } from '../hooks/useCurrentUser.js';
 import { apiRequest } from '../lib/api.js';
@@ -29,7 +28,7 @@ export function NotificationsPage() {
           {notifications.data.map((item) => (
             <article className={item.unread ? 'notification-row unread' : 'notification-row'} key={item.id}>
               <div className="notification-meta">
-                <StatusPill status={item.unread ? 'UNDER_REVIEW' : 'APPROVED'} subtle />
+                <span className={item.unread ? 'notification-dot unread' : 'notification-dot'} aria-hidden="true" />
                 <span>{labelStatus(item.type)}</span>
               </div>
               <div className="notification-body">

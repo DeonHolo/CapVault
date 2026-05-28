@@ -10,11 +10,13 @@ import {
   Gauge,
   GraduationCap,
   Rows,
+  ShieldCheck,
   UsersThree
 } from '@phosphor-icons/react';
 
 export const navItems = [
   { to: '/', label: 'Dashboard', icon: Gauge },
+  { to: '/access', label: 'Access', icon: ShieldCheck },
   { to: '/class-records', label: 'Class Records', icon: Database, roles: ['ADMIN'] },
   { to: '/groups', label: 'Groups', icon: UsersThree },
   { to: '/tracker', label: 'Tracker', icon: Rows },

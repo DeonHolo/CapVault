@@ -43,6 +43,7 @@ class CapVaultServiceIntegrationTest {
     @Autowired CalendarService calendarService;
     @Autowired ReportService reportService;
     @Autowired AccessControlService accessControl;
+    @Autowired UserManagementService userManagement;
 
     @Test
     void validatesInstitutionalEmailAndEnforcesGroupAccess() {
@@ -93,9 +94,46 @@ class CapVaultServiceIntegrationTest {
 
         CapVaultDtos.ArchiveDto archive = archiveService.archiveVersion(fixtures.adviser(), reviewed.id(), reviewed.versions().getFirst().id());
         assertThat(archive.status()).isEqualTo(ArchiveStatus.ARCHIVED);
+        assertThat(submissionService.readVersion(fixtures.student(), reviewed.versions().getFirst().id())).isNotEmpty();
         CapVaultDtos.HashCheckDto check = hashService.verify(fixtures.admin(), archive.id());
         assertThat(check.result()).isEqualTo("Unchanged");
         assertThat(archives.count()).isEqualTo(1);
+    }
+
+    @Test
+    void verifiesStudentNumberAgainstClassRecordMember() {
+        Fixtures fixtures = fixtures();
+
+        CapVaultDtos.StudentVerificationDto result = userManagement.findStudentAccessByNumber(fixtures.student().getStudentNumber());
+
+        assertThat(result.group().teamCode()).isEqualTo(fixtures.group().getTeamCode());
+        assertThat(groupService.list(fixtures.student())).singleElement()
+                .satisfies(group -> assertThat(group.teamCode()).isEqualTo(fixtures.group().getTeamCode()));
+    }
+
+    @Test
+    void rejectsStudentNumberClaimedByAnotherAccount() {
+        Fixtures fixtures = fixtures();
+        UserAccount impostor = users.save(new UserAccount("impostor" + System.nanoTime() + "@cit.edu", "Impostor Student", Role.STUDENT, null, true));
+
+        assertThatThrownBy(() -> userManagement.verifyStudentNumber(impostor, fixtures.student().getStudentNumber()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("already assigned");
+    }
+
+    @Test
+    void rejectsDuplicateStudentNumberOnUserUpsert() {
+        Fixtures fixtures = fixtures();
+
+        assertThatThrownBy(() -> userManagement.upsert(new CapVaultDtos.UpsertUserRequest(
+                "duplicate" + System.nanoTime() + "@cit.edu",
+                "Duplicate Student",
+                Role.STUDENT,
+                fixtures.student().getStudentNumber(),
+                true
+        )))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("already assigned");
     }
 
     @Test

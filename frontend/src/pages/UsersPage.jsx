@@ -5,6 +5,7 @@ import { Button } from '../components/common/Button.jsx';
 import { FormField } from '../components/common/FormField.jsx';
 import { LoadingState, ErrorState } from '../components/common/DataState.jsx';
 import { TableShell } from '../components/common/TableShell.jsx';
+import { CollapsibleSection } from '../components/common/CollapsibleSection.jsx';
 import { useApiResource } from '../hooks/useApiResource.js';
 import { apiRequest } from '../lib/api.js';
 
@@ -28,12 +29,8 @@ export function UsersPage() {
     <div className="page-grid">
       <PageHeader title="Users and Roles" description="Manage Admin, Adviser, and Student accounts with cit.edu institutional validation." />
       {message ? <div className="inline-message success">{message}</div> : null}
-      <section className="split-grid wide-left">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Registered accounts</h2>
-            <p>Only validated institutional accounts should receive active access.</p>
-          </div>
+      <section className="users-admin-layout">
+        <CollapsibleSection title="Registered accounts" description="Validated institutional accounts with assigned roles." count={(users.data || []).length} defaultOpen={false}>
           <TableShell
             columns={[
               { key: 'name', label: 'Name' },
@@ -46,14 +43,14 @@ export function UsersPage() {
             renderRow={(user) => (
               <tr key={user.id}>
                 <td>{user.displayName}</td>
-                <td>{user.email}</td>
+                <td className="break-cell">{user.email}</td>
                 <td>{user.role}</td>
                 <td>{user.institutionalValidated ? 'Yes' : 'No'}</td>
                 <td>{user.enabled ? 'Yes' : 'No'}</td>
               </tr>
             )}
           />
-        </div>
+        </CollapsibleSection>
         <form className="panel form-grid" onSubmit={save}>
           <div className="panel-header">
             <h2>Create or update user</h2>

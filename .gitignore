@@ -9,6 +9,7 @@ dist/
 !.env.example
 backend/storage/
 backend/logs/
+logs/
 frontend/.vite/
 *.log
 *.out.log

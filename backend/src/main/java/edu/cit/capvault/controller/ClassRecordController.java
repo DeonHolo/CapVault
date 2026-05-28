@@ -37,4 +37,10 @@ public class ClassRecordController {
     public List<CapVaultDtos.ClassRecordImportDto> imports() {
         return classRecords.recentImports();
     }
+
+    @DeleteMapping("/dev/reset-tracker")
+    @PreAuthorize("hasRole('ADMIN')")
+    public CapVaultDtos.ClassRecordResetDto resetImportedTracker() {
+        return classRecords.resetImportedTracker(currentUser.requireCurrentUser());
+    }
 }

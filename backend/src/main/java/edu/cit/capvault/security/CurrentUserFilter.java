@@ -28,13 +28,13 @@ public class CurrentUserFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         String email = request.getHeader(HEADER);
-        if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            users.findByEmailIgnoreCase(email).filter(UserAccount::isEnabled).ifPresent(user -> {
+        if (email != null && !email.isBlank()) {
+            users.findByEmailIgnoreCase(email.trim()).filter(UserAccount::isEnabled).ifPresentOrElse(user -> {
                 List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(user.getEmail(), "header", authorities);
                 authentication.setDetails(user);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
-            });
+            }, SecurityContextHolder::clearContext);
         }
         filterChain.doFilter(request, response);
     }

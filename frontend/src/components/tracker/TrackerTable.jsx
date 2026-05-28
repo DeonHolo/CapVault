@@ -2,7 +2,20 @@ import { useMemo, useState } from 'react';
 import { Check, PencilSimple } from '@phosphor-icons/react';
 import { Button } from '../common/Button.jsx';
 
-export function TrackerTable({ rows, adminEdit, onSelectRow, onSaveRow }) {
+const COMPACT_MILESTONE_LABELS = {
+  probexploration: 'ProbEx',
+  convergence: 'Conv.',
+  rrl: 'RRL',
+  project_proposal: 'Proposal',
+  srs: 'SRS',
+  sdd: 'SDD',
+  adviser_assessment: 'Adviser',
+  sourcecode: 'Source',
+  demo: 'Demo',
+  peerevaluation: 'Peer Eval'
+};
+
+export function TrackerTable({ rows, adminEdit, onSelectRow, onSaveRow, activeRowId }) {
   const [editingRowId, setEditingRowId] = useState(null);
   const [draft, setDraft] = useState({});
   const milestones = useMemo(() => rows[0]?.cells || [], [rows]);
@@ -21,20 +34,27 @@ export function TrackerTable({ rows, adminEdit, onSelectRow, onSaveRow }) {
   return (
     <div className="tracker-table-wrap">
       <table className="tracker-table">
+        <colgroup>
+          <col className="tracker-col-name" />
+          <col className="tracker-col-team" />
+          <col className="tracker-col-member" />
+          {milestones.map((cell) => <col className="tracker-col-milestone" key={cell.milestoneKey} />)}
+          {adminEdit ? <col className="tracker-col-actions" /> : null}
+        </colgroup>
         <thead>
           <tr>
             <th className="sticky-col first">Name of Student</th>
             <th className="sticky-col second">Team Code</th>
             <th className="sticky-col third">Member #</th>
             {milestones.map((cell) => (
-              <th key={cell.milestoneKey}>{cell.label}</th>
+              <th key={cell.milestoneKey} title={cell.label}>{COMPACT_MILESTONE_LABELS[cell.milestoneKey] || cell.label}</th>
             ))}
             {adminEdit ? <th>Actions</th> : null}
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.id} onClick={() => onSelectRow(row)} tabIndex={0}>
+            <tr key={row.id} className={activeRowId === row.id ? 'active-data-row' : ''} onClick={() => onSelectRow(row)} tabIndex={0}>
               <td className="sticky-col first strong-cell">{row.studentName}</td>
               <td className="sticky-col second mono-cell">{row.teamCode}</td>
               <td className="sticky-col third mono-cell">{row.memberNumber}</td>

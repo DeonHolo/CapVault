@@ -19,7 +19,7 @@ public class ReviewController {
     }
 
     @PatchMapping("/submissions/{submissionId}")
-    @PreAuthorize("hasRole('ADVISER')")
+    @PreAuthorize("hasAnyRole('ADMIN','ADVISER')")
     public CapVaultDtos.SubmissionDto review(@PathVariable Long submissionId, @Valid @RequestBody CapVaultDtos.ReviewRequest request) {
         return reviews.review(currentUser.requireCurrentUser(), submissionId, request);
     }

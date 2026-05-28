@@ -1,7 +1,23 @@
+import { useEffect, useState } from 'react';
 import { MagnifyingGlass, SlidersHorizontal } from '@phosphor-icons/react';
 import { TRACKER_MILESTONES } from '../../lib/constants.js';
 
 export function TrackerFilters({ filters, onChange, teamOptions, canEdit = false, adminEdit, onAdminEditChange }) {
+  const [searchDraft, setSearchDraft] = useState(filters.search || '');
+
+  useEffect(() => {
+    setSearchDraft(filters.search || '');
+  }, [filters.search]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      if (searchDraft !== filters.search) {
+        onChange({ ...filters, search: searchDraft });
+      }
+    }, 280);
+    return () => window.clearTimeout(timeoutId);
+  }, [filters, searchDraft, onChange]);
+
   function setValue(key, value) {
     onChange({ ...filters, [key]: value });
   }
@@ -10,7 +26,7 @@ export function TrackerFilters({ filters, onChange, teamOptions, canEdit = false
     <section className="filter-bar">
       <label className="search-control">
         <MagnifyingGlass weight="regular" />
-        <input value={filters.search} onChange={(event) => setValue('search', event.target.value)} placeholder="Search student, team, milestone, value" />
+        <input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Search student, team, milestone, value" />
       </label>
       <select value={filters.teamCode} onChange={(event) => setValue('teamCode', event.target.value)}>
         <option value="">All teams</option>

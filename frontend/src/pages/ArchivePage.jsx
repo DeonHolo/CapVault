@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
-import { MagnifyingGlass, ShieldCheck } from '@phosphor-icons/react';
+import { DownloadSimple, Eye, MagnifyingGlass, ShieldCheck } from '@phosphor-icons/react';
 import { PageHeader } from '../components/common/PageHeader.jsx';
 import { Button } from '../components/common/Button.jsx';
 import { LoadingState, ErrorState, EmptyState } from '../components/common/DataState.jsx';
 import { StatusPill } from '../components/common/StatusPill.jsx';
 import { TableShell } from '../components/common/TableShell.jsx';
 import { useApiResource } from '../hooks/useApiResource.js';
-import { apiRequest } from '../lib/api.js';
+import { apiRequest, downloadProtectedFile, openProtectedFile } from '../lib/api.js';
 import { formatDateTime } from '../lib/format.js';
 
 export function ArchivePage() {
@@ -62,7 +62,13 @@ export function ArchivePage() {
               <td><StatusPill status={row.status} subtle /></td>
               <td>{formatDateTime(row.archiveDate)}</td>
               <td className="hash-cell">{row.sha256}</td>
-              <td><Button size="sm" variant="secondary" icon={ShieldCheck} onClick={() => verify(row.id)}>Verify</Button></td>
+              <td>
+                <div className="table-actions">
+                  <Button size="sm" variant="secondary" icon={Eye} onClick={() => openProtectedFile(`/api/archive/${row.id}/download`)}>View</Button>
+                  <Button size="sm" variant="secondary" icon={DownloadSimple} onClick={() => downloadProtectedFile(`/api/archive/${row.id}/download`, row.filename)}>Download</Button>
+                  <Button size="sm" variant="secondary" icon={ShieldCheck} onClick={() => verify(row.id)}>Verify</Button>
+                </div>
+              </td>
             </tr>
           )}
         />

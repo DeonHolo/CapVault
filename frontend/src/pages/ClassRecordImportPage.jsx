@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowsClockwise, Eye } from '@phosphor-icons/react';
+import { ArrowsClockwise, Eye, Trash } from '@phosphor-icons/react';
 import { PageHeader } from '../components/common/PageHeader.jsx';
 import { Button } from '../components/common/Button.jsx';
 import { FormField } from '../components/common/FormField.jsx';
@@ -15,7 +15,9 @@ export function ClassRecordImportPage() {
   const [preview, setPreview] = useState(null);
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [resetText, setResetText] = useState('');
   const imports = useApiResource('/api/class-records/imports');
+  const showLocalReset = import.meta.env.DEV || ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
   async function previewSheet() {
     setBusy(true);
@@ -43,6 +45,22 @@ export function ClassRecordImportPage() {
     }
   }
 
+  async function resetTracker() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await apiRequest('/api/class-records/dev/reset-tracker', { method: 'DELETE' });
+      setPreview(null);
+      setResetText('');
+      setMessage(result.message);
+      imports.reload();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="page-grid">
       <PageHeader title="Class Record Import" description="Preview, map, validate, import, and re-sync the IT332 class record tracker sheet." />
@@ -58,6 +76,19 @@ export function ClassRecordImportPage() {
         </div>
         {message ? <div className="inline-message">{message}</div> : null}
       </section>
+      {showLocalReset ? (
+        <section className="panel local-tools-panel">
+          <div>
+            <span className="eyeless-label">Developer setup</span>
+            <h2>Clear imported tracker sync</h2>
+            <p>This clears tracker rows, import history, and sheet-imported deadline rows while preserving users, groups, deliverables, submissions, archives, and files.</p>
+          </div>
+          <FormField label="Type CLEAR to confirm">
+            <input value={resetText} onChange={(event) => setResetText(event.target.value)} />
+          </FormField>
+          <Button type="button" variant="secondary" icon={Trash} loading={busy} disabled={resetText !== 'CLEAR'} onClick={resetTracker}>Clear imported tracker</Button>
+        </section>
+      ) : null}
       {preview ? (
         <section className="split-grid">
           <div className="panel">
@@ -76,6 +107,7 @@ export function ClassRecordImportPage() {
             <div className="milestone-tags">
               {preview.milestoneColumns.map((column) => <span key={column}>{column}</span>)}
             </div>
+            <p className="section-note">These tracker milestones are created or updated as group deliverables during sync. Admins can edit or add deliverables from the Groups page after import.</p>
           </div>
           <div className="panel">
             <div className="panel-header">

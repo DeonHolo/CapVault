@@ -39,7 +39,7 @@ public class SubmissionController {
 
     @GetMapping("/versions/{versionId}/download")
     public ResponseEntity<byte[]> downloadVersion(@PathVariable Long versionId) {
-        byte[] bytes = submissions.readVersion(versionId);
+        byte[] bytes = submissions.readVersion(currentUser.requireCurrentUser(), versionId);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=document-version.pdf")
                 .contentType(MediaType.APPLICATION_PDF)

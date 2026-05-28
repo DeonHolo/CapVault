@@ -42,9 +42,20 @@ public class SessionController {
         return userManagement.usersByRole(role);
     }
 
+    @PostMapping("/access/student-number")
+    public CapVaultDtos.StudentVerificationDto accessByStudentNumber(@Valid @RequestBody CapVaultDtos.StudentVerificationRequest request) {
+        return userManagement.findStudentAccessByNumber(request.studentNumber());
+    }
+
     @PostMapping("/users")
     @PreAuthorize("hasRole('ADMIN')")
     public CapVaultDtos.UserDto upsert(@Valid @RequestBody CapVaultDtos.UpsertUserRequest request) {
         return userManagement.upsert(request);
+    }
+
+    @PostMapping("/verify-student-number")
+    @PreAuthorize("hasRole('STUDENT')")
+    public CapVaultDtos.StudentVerificationDto verifyStudentNumber(@Valid @RequestBody CapVaultDtos.StudentVerificationRequest request) {
+        return userManagement.verifyStudentNumber(currentUserService.requireCurrentUser(), request.studentNumber());
     }
 }

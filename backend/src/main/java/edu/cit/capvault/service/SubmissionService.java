@@ -21,9 +21,10 @@ public class SubmissionService {
     private final DriveRetrievalService driveRetrievalService;
     private final NotificationService notificationService;
     private final ActivityLogService activityLog;
+    private final AccessControlService accessControl;
     private final DtoMapper mapper;
 
-    public SubmissionService(DeliverableRepository deliverables, SubmissionRepository submissions, DocumentVersionRepository documentVersions, GroupMemberRepository groupMembers, FileObjectService fileObjectService, DriveRetrievalService driveRetrievalService, NotificationService notificationService, ActivityLogService activityLog, DtoMapper mapper) {
+    public SubmissionService(DeliverableRepository deliverables, SubmissionRepository submissions, DocumentVersionRepository documentVersions, GroupMemberRepository groupMembers, FileObjectService fileObjectService, DriveRetrievalService driveRetrievalService, NotificationService notificationService, ActivityLogService activityLog, AccessControlService accessControl, DtoMapper mapper) {
         this.deliverables = deliverables;
         this.submissions = submissions;
         this.documentVersions = documentVersions;
@@ -32,6 +33,7 @@ public class SubmissionService {
         this.driveRetrievalService = driveRetrievalService;
         this.notificationService = notificationService;
         this.activityLog = activityLog;
+        this.accessControl = accessControl;
         this.mapper = mapper;
     }
 
@@ -75,8 +77,14 @@ public class SubmissionService {
     }
 
     @Transactional(readOnly = true)
-    public byte[] readVersion(Long versionId) {
+    public byte[] readVersion(UserAccount user, Long versionId) {
         DocumentVersion version = documentVersions.findById(versionId).orElseThrow(() -> new IllegalArgumentException("Document version not found."));
+        Submission submission = version.getSubmission();
+        if (user.getRole() == Role.STUDENT
+                && (submission.getStudent().getId().equals(user.getId()) || version.getSubmittedBy().getId().equals(user.getId()))) {
+            return fileObjectService.read(version.getFileObject());
+        }
+        accessControl.requireGroupAccess(user, version.getSubmission().getGroup());
         return fileObjectService.read(version.getFileObject());
     }
 

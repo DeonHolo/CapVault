@@ -8,6 +8,8 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -26,6 +28,8 @@ import java.util.regex.Pattern;
 
 @Service
 public class ClassRecordImportService {
+    private static final String IMPORTED_DEADLINE_DESCRIPTION = "Imported from the class record tracker deadline row.";
+
     public static final List<String> DEFAULT_MILESTONES = List.of(
             "ProbExploration",
             "Convergence",
@@ -48,7 +52,7 @@ public class ClassRecordImportService {
 
     private static final Pattern DATE_PATTERN = Pattern.compile("\\d{1,2}/\\d{1,2}/\\d{4}(\\s+\\d{1,2}:\\d{2}:\\d{2})?");
 
-    private final HttpClient httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+    private HttpClient httpClient;
     private final ClassRecordImportRepository imports;
     private final UserAccountRepository users;
     private final CapstoneGroupRepository groups;
@@ -57,8 +61,9 @@ public class ClassRecordImportService {
     private final DeliverableRepository deliverables;
     private final DeadlineRepository deadlines;
     private final ActivityLogService activityLog;
+    private final Environment environment;
 
-    public ClassRecordImportService(ClassRecordImportRepository imports, UserAccountRepository users, CapstoneGroupRepository groups, GroupMemberRepository groupMembers, TrackerRowRepository trackerRows, DeliverableRepository deliverables, DeadlineRepository deadlines, ActivityLogService activityLog) {
+    public ClassRecordImportService(ClassRecordImportRepository imports, UserAccountRepository users, CapstoneGroupRepository groups, GroupMemberRepository groupMembers, TrackerRowRepository trackerRows, DeliverableRepository deliverables, DeadlineRepository deadlines, ActivityLogService activityLog, Environment environment) {
         this.imports = imports;
         this.users = users;
         this.groups = groups;
@@ -67,6 +72,7 @@ public class ClassRecordImportService {
         this.deliverables = deliverables;
         this.deadlines = deadlines;
         this.activityLog = activityLog;
+        this.environment = environment;
     }
 
     public CapVaultDtos.ClassRecordPreviewDto preview(String sourceUrl) {
@@ -163,6 +169,25 @@ public class ClassRecordImportService {
         return imports.findTop10ByOrderByStartedAtDesc().stream().map(this::toDto).toList();
     }
 
+    @Transactional
+    public CapVaultDtos.ClassRecordResetDto resetImportedTracker(UserAccount actor) {
+        if (!environment.acceptsProfiles(Profiles.of("local", "test"))) {
+            throw new IllegalStateException("Class record reset is available only for developer setup profiles.");
+        }
+        long trackerCount = trackerRows.count();
+        long importCount = imports.count();
+        long deadlineCount = deadlines.deleteByDescription(IMPORTED_DEADLINE_DESCRIPTION);
+        trackerRows.deleteAllInBatch();
+        imports.deleteAllInBatch();
+        activityLog.record(actor, "CLASS_RECORD_TRACKER_RESET", "ClassRecordImport", null, "Tracker sync state was cleared from developer setup controls.");
+        return new CapVaultDtos.ClassRecordResetDto(
+                trackerCount,
+                importCount,
+                deadlineCount,
+                "Tracker rows, import history, and sheet-imported deadline rows were cleared. Groups, users, deliverables, submissions, and archives were preserved."
+        );
+    }
+
     public TrackerStatus normalize(String raw) {
         String value = raw == null ? "" : raw.trim();
         if (value.isBlank()) {
@@ -193,7 +218,11 @@ public class ClassRecordImportService {
                         .findFirst()
                         .orElseGet(() -> deliverables.save(new Deliverable(milestone, toMilestoneKey(milestone), "Class-wide tracker deadline.", dueAt, null)));
                 global.setDueAt(dueAt);
-                deadlines.save(new Deadline(milestone + " deadline", "Imported from the class record tracker deadline row.", dueAt, global, null, Role.STUDENT));
+                Deadline deadline = deadlines.findFirstByTitleAndDeliverableAndGroupIsNullAndTargetRole(milestone + " deadline", global, Role.STUDENT)
+                        .orElseGet(() -> new Deadline(milestone + " deadline", IMPORTED_DEADLINE_DESCRIPTION, dueAt, global, null, Role.STUDENT));
+                deadline.setDueAt(dueAt);
+                deadline.setDescription(IMPORTED_DEADLINE_DESCRIPTION);
+                deadlines.save(deadline);
                 activityLog.record(actor, "DEADLINE_IMPORTED", "Deliverable", global.getId(), milestone + " deadline imported from the tracker sheet.");
             });
         }
@@ -226,7 +255,7 @@ public class ClassRecordImportService {
             }
             String csvUrl = toCsvUrl(sourceUrl);
             HttpRequest request = HttpRequest.newBuilder(URI.create(csvUrl)).GET().build();
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            HttpResponse<String> response = httpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() >= 400) {
                 throw new IllegalArgumentException("Class record source returned HTTP " + response.statusCode() + ".");
             }
@@ -237,6 +266,13 @@ public class ClassRecordImportService {
             Thread.currentThread().interrupt();
             throw new IllegalArgumentException("Class record fetch was interrupted.", ex);
         }
+    }
+
+    private synchronized HttpClient httpClient() {
+        if (httpClient == null) {
+            httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+        }
+        return httpClient;
     }
 
     private ParsedSheet parseCsv(String csv) throws IOException {

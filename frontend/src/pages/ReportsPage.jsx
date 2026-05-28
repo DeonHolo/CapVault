@@ -5,6 +5,7 @@ import { Button } from '../components/common/Button.jsx';
 import { LoadingState, ErrorState } from '../components/common/DataState.jsx';
 import { StatusPill } from '../components/common/StatusPill.jsx';
 import { TableShell } from '../components/common/TableShell.jsx';
+import { CollapsibleSection } from '../components/common/CollapsibleSection.jsx';
 import { useApiResource } from '../hooks/useApiResource.js';
 import { apiRequest } from '../lib/api.js';
 import { formatDate, percent } from '../lib/format.js';
@@ -64,11 +65,7 @@ export function ReportsPage() {
         ))}
       </section>
       <section className="split-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Per-group tracker progress</h2>
-            <p>Completion coverage from imported tracker values.</p>
-          </div>
+        <CollapsibleSection title="Per-group tracker progress" description="Completion coverage from imported tracker values." count={reports.data.teamProgress.length} defaultOpen={false}>
           <TableShell
             columns={[
               { key: 'team', label: 'Team' },
@@ -86,12 +83,8 @@ export function ReportsPage() {
               </tr>
             )}
           />
-        </div>
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Per-milestone coverage</h2>
-            <p>Missing and not-applicable cells remain visible.</p>
-          </div>
+        </CollapsibleSection>
+        <CollapsibleSection title="Per-milestone coverage" description="Missing and not-applicable cells remain visible." count={reports.data.milestoneProgress.length} defaultOpen={false}>
           <TableShell
             columns={[
               { key: 'milestone', label: 'Milestone' },
@@ -109,13 +102,9 @@ export function ReportsPage() {
               </tr>
             )}
           />
-        </div>
+        </CollapsibleSection>
       </section>
-      <section className="panel">
-        <div className="panel-header">
-          <h2>Submission and archive drill-down</h2>
-          <p>Report rows connect deliverables, versions, deadlines, submissions, and archive state.</p>
-        </div>
+      <CollapsibleSection title="Submission and archive drill-down" description="Rows connect deliverables, versions, deadlines, submissions, and archive state." count={reports.data.rows.length} defaultOpen={false}>
         <TableShell
           columns={[
             { key: 'team', label: 'Team' },
@@ -139,7 +128,7 @@ export function ReportsPage() {
             </tr>
           )}
         />
-      </section>
+      </CollapsibleSection>
     </div>
   );
 }

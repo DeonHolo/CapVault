@@ -5,6 +5,7 @@ import { Button } from '../components/common/Button.jsx';
 import { FormField } from '../components/common/FormField.jsx';
 import { LoadingState, ErrorState } from '../components/common/DataState.jsx';
 import { TableShell } from '../components/common/TableShell.jsx';
+import { CollapsibleSection } from '../components/common/CollapsibleSection.jsx';
 import { useApiResource } from '../hooks/useApiResource.js';
 import { useCurrentUser } from '../hooks/useCurrentUser.js';
 import { apiRequest } from '../lib/api.js';
@@ -72,11 +73,7 @@ export function CalendarPage() {
       <PageHeader title="Deadline Calendar and Announcements" description="Shared calendar entries, role-targeted announcements, and notification creation." />
       {message ? <div className="inline-message success">{message}</div> : null}
       <section className="split-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h2>Deadlines</h2>
-            <p>Connected to deliverables and groups when applicable.</p>
-          </div>
+        <CollapsibleSection title="Deadlines" description="Connected to deliverables and groups when applicable." count={deadlineRows.length} defaultOpen={false}>
           <TableShell
             columns={deadlineColumns}
             rows={deadlineRows}
@@ -90,7 +87,7 @@ export function CalendarPage() {
               </tr>
             )}
           />
-        </div>
+        </CollapsibleSection>
         <div className="panel">
           <div className="panel-header">
             <h2>Announcements</h2>
@@ -111,23 +108,23 @@ export function CalendarPage() {
         </div>
       </section>
       {currentUser.role === 'ADMIN' ? (
-        <section className="split-grid">
-          <form className="panel form-grid" onSubmit={saveDeadline}>
+        <section className="split-grid admin-action-grid">
+          <form className="panel form-grid two" onSubmit={saveDeadline}>
             <div className="panel-header"><h2>Create deadline</h2><p>Students and advisers receive relevant notices.</p></div>
             <FormField label="Title"><input value={deadlineForm.title} onChange={(event) => setDeadlineForm({ ...deadlineForm, title: event.target.value })} required /></FormField>
             <FormField label="Due date"><input type="datetime-local" value={deadlineForm.dueAt} onChange={(event) => setDeadlineForm({ ...deadlineForm, dueAt: event.target.value })} required /></FormField>
             <FormField label="Audience"><select value={deadlineForm.targetRole} onChange={(event) => setDeadlineForm({ ...deadlineForm, targetRole: event.target.value })}><option value="">Class-wide</option><option value="STUDENT">Students</option><option value="ADVISER">Advisers</option><option value="ADMIN">Admins</option></select></FormField>
             <FormField label="Team"><select value={deadlineForm.groupId} onChange={(event) => setDeadlineForm({ ...deadlineForm, groupId: event.target.value, deliverableId: '' })}><option value="">All groups</option>{(groups.data || []).map((group) => <option key={group.id} value={group.id}>{group.teamCode}</option>)}</select></FormField>
             <FormField label="Deliverable"><select value={deadlineForm.deliverableId} onChange={(event) => setDeadlineForm({ ...deadlineForm, deliverableId: event.target.value })}><option value="">General deadline</option>{deadlineDeliverables.map((deliverable) => <option key={deliverable.id} value={deliverable.id}>{deliverable.title}</option>)}</select></FormField>
-            <FormField label="Description"><textarea value={deadlineForm.description} onChange={(event) => setDeadlineForm({ ...deadlineForm, description: event.target.value })} /></FormField>
-            <Button icon={Plus}>Post deadline</Button>
+            <FormField label="Description" className="form-span"><textarea value={deadlineForm.description} onChange={(event) => setDeadlineForm({ ...deadlineForm, description: event.target.value })} /></FormField>
+            <div className="button-row end form-span"><Button icon={Plus}>Post deadline</Button></div>
           </form>
-          <form className="panel form-grid" onSubmit={saveAnnouncement}>
+          <form className="panel form-grid two" onSubmit={saveAnnouncement}>
             <div className="panel-header"><h2>Create announcement</h2><p>Publish class-wide or role-targeted notices.</p></div>
             <FormField label="Title"><input value={announcementForm.title} onChange={(event) => setAnnouncementForm({ ...announcementForm, title: event.target.value })} required /></FormField>
             <FormField label="Audience"><select value={announcementForm.targetRole} onChange={(event) => setAnnouncementForm({ ...announcementForm, targetRole: event.target.value })}><option value="">Class-wide</option><option value="STUDENT">Students</option><option value="ADVISER">Advisers</option><option value="ADMIN">Admins</option></select></FormField>
-            <FormField label="Body"><textarea value={announcementForm.body} onChange={(event) => setAnnouncementForm({ ...announcementForm, body: event.target.value })} required /></FormField>
-            <Button icon={Megaphone}>Publish announcement</Button>
+            <FormField label="Body" className="form-span"><textarea value={announcementForm.body} onChange={(event) => setAnnouncementForm({ ...announcementForm, body: event.target.value })} required /></FormField>
+            <div className="button-row end form-span"><Button icon={Megaphone}>Publish announcement</Button></div>
           </form>
         </section>
       ) : null}

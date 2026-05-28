@@ -1,6 +1,6 @@
-export function FormField({ label, helper, error, children }) {
+export function FormField({ label, helper, error, children, className = '' }) {
   return (
-    <label className="form-field">
+    <label className={`form-field ${className}`.trim()}>
       <span className="form-label">{label}</span>
       {children}
       {helper ? <span className="form-helper">{helper}</span> : null}

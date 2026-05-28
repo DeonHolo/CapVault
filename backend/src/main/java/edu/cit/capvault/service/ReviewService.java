@@ -27,9 +27,9 @@ public class ReviewService {
     }
 
     @Transactional
-    public CapVaultDtos.SubmissionDto review(UserAccount adviser, Long submissionId, CapVaultDtos.ReviewRequest request) {
+    public CapVaultDtos.SubmissionDto review(UserAccount reviewer, Long submissionId, CapVaultDtos.ReviewRequest request) {
         Submission submission = submissions.findById(submissionId).orElseThrow(() -> new IllegalArgumentException("Submission not found."));
-        if (submission.getGroup().getAdviser() == null || !submission.getGroup().getAdviser().getId().equals(adviser.getId())) {
+        if (reviewer.getRole() != Role.ADMIN && (submission.getGroup().getAdviser() == null || !submission.getGroup().getAdviser().getId().equals(reviewer.getId()))) {
             throw new org.springframework.security.access.AccessDeniedException("Submission is outside this adviser's assigned groups.");
         }
         DocumentVersion version = request.documentVersionId() == null
@@ -37,11 +37,12 @@ public class ReviewService {
                 : documentVersions.findById(request.documentVersionId()).orElseThrow(() -> new IllegalArgumentException("Document version not found."));
         submission.setStatus(request.status());
         submission.setAdviserRemarks(request.remarks());
-        submission.setReviewedBy(adviser);
+        submission.setReviewedBy(reviewer);
         submission.setReviewedAt(java.time.Instant.now());
-        adviserRemarks.save(new AdviserRemark(submission, version, adviser, request.remarks()));
-        notificationService.notify(submission.getStudent(), NotificationType.FEEDBACK, "Adviser feedback posted", submission.getDeliverable().getTitle() + " is now " + request.status().name().replace('_', ' ') + ".", "/submissions");
-        activityLog.record(adviser, "SUBMISSION_REVIEWED", "Submission", submission.getId(), submission.getDeliverable().getTitle() + " was reviewed as " + request.status() + ".");
+        adviserRemarks.save(new AdviserRemark(submission, version, reviewer, request.remarks()));
+        String reviewerLabel = reviewer.getRole() == Role.ADMIN ? "Review" : "Adviser";
+        notificationService.notify(submission.getStudent(), NotificationType.FEEDBACK, reviewerLabel + " feedback posted", submission.getDeliverable().getTitle() + " is now " + request.status().name().replace('_', ' ') + ".", "/submissions");
+        activityLog.record(reviewer, "SUBMISSION_REVIEWED", "Submission", submission.getId(), submission.getDeliverable().getTitle() + " was reviewed as " + request.status() + ".");
         return mapper.submission(submission);
     }
 }

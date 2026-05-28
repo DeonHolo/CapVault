@@ -5,7 +5,7 @@ export function Button({ children, variant = 'primary', size = 'md', icon: Icon,
   return (
     <button className={classes} disabled={loading || props.disabled} {...props}>
       {loading ? <ArrowClockwise className="animate-spin" weight="regular" /> : Icon ? <Icon weight="regular" /> : null}
-      <span>{children}</span>
+      <span className="btn-label">{children}</span>
     </button>
   );
 }

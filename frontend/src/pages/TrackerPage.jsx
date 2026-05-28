@@ -3,6 +3,7 @@ import { ArrowsClockwise } from '@phosphor-icons/react';
 import { PageHeader } from '../components/common/PageHeader.jsx';
 import { Button } from '../components/common/Button.jsx';
 import { LoadingState, ErrorState, EmptyState } from '../components/common/DataState.jsx';
+import { CollapsibleSection } from '../components/common/CollapsibleSection.jsx';
 import { MyProgressStrip } from '../components/tracker/MyProgressStrip.jsx';
 import { TrackerFilters } from '../components/tracker/TrackerFilters.jsx';
 import { TrackerTable } from '../components/tracker/TrackerTable.jsx';
@@ -28,7 +29,9 @@ export function TrackerPage() {
   const groups = useApiResource('/api/groups');
 
   const teamOptions = useMemo(() => Array.from(new Set((tracker.data?.rows || []).map((row) => row.teamCode))).sort(), [tracker.data]);
-  const selectedGroup = (groups.data || []).find((group) => group.teamCode === selectedRow?.teamCode);
+  const rows = tracker.data?.rows || [];
+  const activeRow = selectedRow || rows[0];
+  const selectedGroup = (groups.data || []).find((group) => group.teamCode === activeRow?.teamCode);
 
   async function saveRow(rowId, values) {
     await apiRequest(`/api/tracker/rows/${rowId}`, { method: 'PATCH', body: { values } });
@@ -47,10 +50,9 @@ export function TrackerPage() {
     }
   }
 
-  if (tracker.loading || myProgress.loading) return <LoadingState rows={8} />;
+  if ((tracker.loading && !tracker.data) || (myProgress.loading && !myProgress.data)) return <LoadingState rows={8} />;
   if (tracker.error) return <ErrorState message={tracker.error} onRetry={tracker.reload} />;
 
-  const rows = tracker.data?.rows || [];
   return (
     <div className="page-grid tracker-layout">
       <PageHeader
@@ -67,12 +69,14 @@ export function TrackerPage() {
         adminEdit={currentUser?.role === 'ADMIN' && adminEdit}
         onAdminEditChange={setAdminEdit}
       />
+      {activeRow ? <TeamDetailPanel row={activeRow} group={selectedGroup} onClose={() => setSelectedRow(null)} /> : null}
       {rows.length ? (
-        <TrackerTable rows={rows} adminEdit={currentUser?.role === 'ADMIN' && adminEdit} onSelectRow={setSelectedRow} onSaveRow={saveRow} />
+        <CollapsibleSection title="Class-wide tracker table" description="Dense raw tracker values with selected-row focus." count={rows.length} defaultOpen>
+          <TrackerTable rows={rows} adminEdit={currentUser?.role === 'ADMIN' && adminEdit} activeRowId={activeRow?.id} onSelectRow={setSelectedRow} onSaveRow={saveRow} />
+        </CollapsibleSection>
       ) : (
         <EmptyState title="No tracker rows match the current filters" description="Clear filters or sync the class record tracker." />
       )}
-      <TeamDetailPanel row={selectedRow || rows[0]} group={selectedGroup} onClose={() => setSelectedRow(null)} />
     </div>
   );
 }

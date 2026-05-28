@@ -4,6 +4,8 @@ import { AppShell } from '../components/layout/AppShell.jsx';
 import { CurrentUserContext } from '../hooks/useCurrentUser.js';
 import { apiRequest, getStoredUserEmail, setStoredUserEmail } from '../lib/api.js';
 import { DashboardPage } from '../pages/DashboardPage.jsx';
+import { AccessPage } from '../pages/AccessPage.jsx';
+import { LoginPage } from '../pages/LoginPage.jsx';
 import { ClassRecordImportPage } from '../pages/ClassRecordImportPage.jsx';
 import { GroupManagementPage } from '../pages/GroupManagementPage.jsx';
 import { TrackerPage } from '../pages/TrackerPage.jsx';
@@ -17,9 +19,12 @@ import { UsersPage } from '../pages/UsersPage.jsx';
 import { LoadingState, ErrorState } from '../components/common/DataState.jsx';
 import { useCurrentUser } from '../hooks/useCurrentUser.js';
 
+const SESSION_KEY = 'capvault.sessionActive';
+
 export default function App() {
   const [users, setUsers] = useState([]);
   const [currentEmail, setCurrentEmail] = useState(getStoredUserEmail());
+  const [sessionActive, setSessionActive] = useState(localStorage.getItem(SESSION_KEY) === 'true');
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -34,7 +39,7 @@ export default function App() {
         if (!active) return;
         setUsers(result);
         const stored = getStoredUserEmail();
-        const selected = result.find((user) => user.email === stored) || result.find((user) => user.role === 'ADMIN') || result[0];
+        const selected = result.find((user) => user.email === stored) || (sessionActive ? result.find((user) => user.role === 'ADMIN') || result[0] : null);
         if (selected) {
           setStoredUserEmail(selected.email);
           setCurrentEmail(selected.email);
@@ -49,7 +54,18 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [sessionActive]);
+
+  async function refreshUsers() {
+    const result = await apiRequest('/api/session/users');
+    setUsers(result);
+    const selected = result.find((user) => user.email === currentEmail) || result[0];
+    if (selected) {
+      setStoredUserEmail(selected.email);
+      setCurrentEmail(selected.email);
+    }
+    return result;
+  }
 
   useEffect(() => {
     let active = true;
@@ -75,8 +91,29 @@ export default function App() {
     setCurrentEmail(email);
   }
 
+  function handleLogin(email) {
+    localStorage.setItem(SESSION_KEY, 'true');
+    setSessionActive(true);
+    setStoredUserEmail(email);
+    setCurrentEmail(email);
+  }
+
+  function handleSignOut() {
+    localStorage.removeItem(SESSION_KEY);
+    setSessionActive(false);
+    setStoredUserEmail('');
+    setCurrentEmail('');
+    setUnreadCount(0);
+  }
+
   const contextValue = useMemo(
-    () => ({ currentUser, users, refreshUnread: () => apiRequest('/api/notifications').then((items) => setUnreadCount(items.filter((item) => item.unread).length)) }),
+    () => ({
+      currentUser,
+      users,
+      refreshUsers,
+      signOut: handleSignOut,
+      refreshUnread: () => apiRequest('/api/notifications').then((items) => setUnreadCount(items.filter((item) => item.unread).length))
+    }),
     [currentUser, users]
   );
 
@@ -99,8 +136,26 @@ export default function App() {
   return (
     <CurrentUserContext.Provider value={contextValue}>
       <Routes>
-        <Route element={<AppShell users={users} currentUser={currentUser} onUserChange={handleUserChange} unreadCount={unreadCount} />}>
+        <Route path="login" element={<LoginPage users={users} onLogin={handleLogin} />} />
+        <Route
+          element={
+            sessionActive && currentUser ? (
+              <AppShell
+                key={currentEmail || 'guest'}
+                users={users}
+                currentUser={currentUser}
+                onUserChange={handleUserChange}
+                onSignOut={handleSignOut}
+                unreadCount={unreadCount}
+                showAccountSwitcher={import.meta.env.DEV}
+              />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        >
           <Route index element={<DashboardPage />} />
+          <Route path="access" element={<AccessPage />} />
           <Route path="class-records" element={<RequireRole roles={['ADMIN']}><ClassRecordImportPage /></RequireRole>} />
           <Route path="groups" element={<GroupManagementPage />} />
           <Route path="tracker" element={<TrackerPage />} />
@@ -111,8 +166,8 @@ export default function App() {
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
           <Route path="users" element={<RequireRole roles={['ADMIN']}><UsersPage /></RequireRole>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
+        <Route path="*" element={<Navigate to={sessionActive && currentUser ? '/' : '/login'} replace />} />
       </Routes>
     </CurrentUserContext.Provider>
   );
