@@ -1,51 +1,33 @@
-# CapVault
+# CapVault V2
 
-CapVault is a capstone project tracking and archival management system for class record sync, live project tracking, submission versioning, adviser review, archive integrity, calendar deadlines, notifications, announcements, and reporting.
+CapVault V2 is being rebuilt as a Google-first capstone submission, tracking, AI triage, and final archive assistant for Sir Ralph Laviste's workflow.
 
-## Local Development
+## Current Source Of Truth
 
-### Backend
+Read these before implementation:
 
-The backend is a Spring Boot Java 21 application. It is PostgreSQL-first, with a local profile available for quick startup.
+- `docs/SRS (2526-sem2-it332-41) (CapVault V2 - Google-first Pivot).md`
+- `docs/SDD (2526-sem2-it332-41) (CapVault V2 - Google-first Pivot).md`
+- `docs/CapVaultV2_Workflow_Pivot_Notes.md`
 
-```powershell
-cd backend
-mvn spring-boot:run "-Dspring-boot.run.profiles=local"
-```
+## Repository Layout
 
-For PostgreSQL:
+- `legacy/v1-app/` contains the original CapVault V1 portal-style implementation.
+- New V2 implementation should use fresh root-level app folders.
+- Recommended V2 folders:
+  - `frontend/` for the React + Vite public form and staff dashboard.
+  - `backend/` for the Spring Boot Google API automation layer.
 
-```powershell
-docker compose up -d postgres
-cd backend
-mvn spring-boot:run
-```
+## V2 Product Direction
 
-### Frontend
+CapVault V2 should not be a login-first student portal. The core workflow is:
 
-```powershell
-cd frontend
-npm install
-npm run dev
-```
+1. Sir connects a class record Google Sheet.
+2. Sir publishes deliverable-specific form links.
+3. Students submit through generated links without required account registration.
+4. Student Number is used for class-record lookup and auto-fill when possible.
+5. PDF-required deliverables strictly block editable or non-PDF links.
+6. Accepted attempts write to Google Sheets and tracker lateness.
+7. Validation and AI triage flags help Sir/advisers review submissions.
+8. Only final accepted PDFs are archived as independent byte copies with SHA-256.
 
-The Vite dev server proxies `/api` calls to `http://localhost:8080`.
-
-## Storage Choice
-
-CapVault uses a `StorageService` abstraction:
-
-- `local` profile stores files on disk for development.
-- `r2` profile uses S3-compatible settings suitable for Cloudflare R2.
-
-Cloudflare R2 is the preferred hosted archive storage target. MinIO is useful for local S3 emulation, but local filesystem storage is simpler for development and R2 is better for the deployed institutional archive.
-
-## Published Tracker Template
-
-The importer supports the published Google Sheet URL format:
-
-```text
-https://docs.google.com/spreadsheets/d/e/{published-id}/pubhtml?gid={gid}&single=true
-```
-
-It converts public `pubhtml` links to CSV when possible, preserves raw tracker values, and stores normalized statuses separately for reporting.
