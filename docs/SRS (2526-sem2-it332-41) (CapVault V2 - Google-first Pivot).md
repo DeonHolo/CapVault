@@ -11,7 +11,7 @@ Working product name: CapVault, pending rename discussion
 
 CapVault V2 shall support the existing capstone class workflow used by Sir Ralph Laviste. The system shall reduce manual checking, copying, and review work while keeping Google Sheets, Google Drive, and Google Docs as the visible operating environment.
 
-The system shall not force students into a login-first portal just to submit deliverables. Submission shall happen through generated, form-like links. The system shall validate student identity against the class record, accept PDF and link submissions according to deliverable rules, write essential records back to Google Sheets, flag problematic submissions, assist Sir/advisers through AI triage, and archive only final accepted documents.
+The system shall not force students into a login-first portal just to submit deliverables. Submission shall happen through generated, form-like links. The system shall use Student Number to match submissions to the class record when possible, accept PDF and link submissions according to deliverable rules, write essential records back to Google Sheets, flag problematic submissions, assist Sir/advisers through AI triage, and archive only final accepted documents.
 
 ## 2. Background And Pivot Rationale
 
@@ -37,8 +37,8 @@ The system shall therefore prioritize:
 - Read class record students, student numbers, team codes, member numbers, advisers, sections, and tracker columns.
 - Generate deliverable-specific submission links.
 - Provide a Google-Forms-like CapVault submission page.
-- Validate Student Number against the class record.
-- Auto-fill Student Name, Team Code, section, and adviser from the Student Number.
+- Use Student Number to look up class record identity data during submission.
+- Auto-fill Student Name, Team Code, section, and adviser when the Student Number matches the class record.
 - Accept Google Drive PDF links, repository links, presentation links, and other configured fields.
 - Strictly block non-PDF links for PDF-required document deliverables.
 - Write submission rows and attempt history to Google Sheets.
@@ -67,7 +67,7 @@ The system shall therefore prioritize:
 
 ### 4.1 Student Without Account
 
-A student without an account can open a generated deliverable link, enter Student Number, review auto-filled identity fields, paste required links, and submit.
+A student without an account can open a generated deliverable link, enter Student Number, review auto-filled identity fields when a match is found, paste required links, and submit. Student Number matching helps organize the submission but is not an account-proof gate for anonymous submission.
 
 ### 4.2 Student With Optional Account
 
@@ -149,14 +149,16 @@ Acceptance criteria:
 - The system preserves raw tracker values such as numbers, dates, blanks, and `#N/A`.
 - The system can refresh class record data after changes.
 
-### FR-002 Student Identity Validation
+### FR-002 Student Identity Lookup And Account Claim Validation
 
-The system shall validate submitted Student Numbers against the connected class record.
+The system shall use submitted Student Numbers to look up class record identity data for anonymous submissions. Strict Student Number validation and locking shall apply only when a student creates or links an optional account.
 
 Acceptance criteria:
 
-- A valid Student Number auto-fills Student Name, Team Code, adviser, and section where available.
-- An unknown Student Number blocks submission with a clear message.
+- A matched Student Number auto-fills Student Name, Team Code, adviser, and section where available.
+- An unmatched Student Number does not block anonymous submission by itself.
+- Unmatched anonymous submissions are recorded with an `Unmatched Student Number` flag for Sir/Teacher/Admin review.
+- Tracker writeback is skipped for unmatched anonymous submissions until Teacher/Admin resolves the identity.
 - Optional student accounts can claim only unclaimed Student Numbers.
 - Changing a claimed Student Number requires Teacher/Admin action.
 
@@ -179,7 +181,8 @@ Acceptance criteria:
 
 - Student login is not required.
 - Student Number is the primary identity input.
-- Identity fields auto-fill from the class record.
+- Identity fields auto-fill from the class record when a match is found.
+- Anonymous submissions can still proceed when the Student Number cannot be matched, but they are flagged for review.
 - Students can submit required links and notes.
 - The page clearly marks required fields.
 - The page shows clear errors for missing fields, invalid links, or blocked file types.
@@ -365,7 +368,7 @@ Submission Attempt ID, trigger user, summary, flags, checklist results, confiden
 
 ### Tracker Writeback
 
-Student Number, Team Code, deliverable, tracker column, first accepted attempt timestamp, days late value, write status.
+Student Number, Team Code, deliverable, tracker column, first accepted matched attempt timestamp, days late value, write status.
 
 ### Archive Record
 

@@ -114,7 +114,7 @@ Responsibilities:
 - Read configured sheet ranges.
 - Normalize student/team/adviser records.
 - Preserve raw tracker values.
-- Resolve Student Number to Student Name, Team Code, Member Number, Section, and Adviser.
+- Attempt to resolve Student Number to Student Name, Team Code, Member Number, Section, and Adviser.
 - Provide target tracker row/column references for writeback.
 
 Dependencies:
@@ -142,8 +142,9 @@ Dependencies:
 Responsibilities:
 
 - Load published deliverable forms.
-- Validate Student Number.
-- Auto-fill identity data.
+- Look up Student Number in the class record when possible.
+- Auto-fill identity data when a class record match is found.
+- Allow anonymous submission to continue when Student Number is unmatched, while flagging the attempt for staff review.
 - Validate required fields.
 - Enforce PDF-only rules before accepted submission.
 - Record accepted attempts.
@@ -199,7 +200,7 @@ Responsibilities:
 
 Important rule:
 
-For PDF-required deliverables, non-PDF links are blocked before accepted submission and therefore do not count as attempts. For accepted submissions, tracker lateness is based on the first accepted attempt timestamp, not AI quality or later review outcome.
+For PDF-required deliverables, non-PDF links are blocked before accepted submission and therefore do not count as attempts. For accepted matched submissions, tracker lateness is based on the first accepted matched attempt timestamp, not AI quality or later review outcome. Unmatched anonymous submissions are recorded but do not write tracker lateness until staff resolves the identity.
 
 ### 4.7 LightweightValidationJob
 
@@ -301,13 +302,13 @@ Responsibilities:
 
 1. Student opens generated deliverable link.
 2. Student enters Student Number.
-3. CapVault validates Student Number against class record.
-4. CapVault auto-fills Student Name, Team Code, Member Number, Section, and Adviser where available.
+3. CapVault attempts to match Student Number against the class record.
+4. If a match is found, CapVault auto-fills Student Name, Team Code, Member Number, Section, and Adviser where available.
 5. Student pastes required links.
 6. For PDF-required fields, CapVault uses Drive metadata to verify MIME type before accepting.
 7. Non-PDF, editable, inaccessible, or unverifiable links are blocked.
 8. Accepted attempts are written to Sheets.
-9. Tracker lateness is written from the first accepted attempt.
+9. Tracker lateness is written from the first accepted matched attempt.
 10. Lightweight checks continue in the background.
 
 ### 5.4 Validation And AI Triage
@@ -472,7 +473,7 @@ Errors must be specific and recoverable.
 
 Examples:
 
-- "Student Number was not found in the class record."
+- "Student Number was not found in the class record. Your submission can still be sent, but it will be flagged for staff review."
 - "This deliverable requires a PDF. Google Docs links cannot be accepted because they remain editable after submission."
 - "CapVault cannot access this Drive link. Please set sharing to anyone with the link or submit a different PDF link."
 - "This field is required."
@@ -501,7 +502,6 @@ Retryable jobs:
 
 Non-retryable student submission blocks:
 
-- Unknown Student Number.
 - Missing required fields.
 - Non-PDF link for PDF-required field.
 - Inaccessible/unverifiable link for PDF-required field.
@@ -510,7 +510,7 @@ Non-retryable student submission blocks:
 
 ### Student Without Account
 
-Can submit through public deliverable links after Student Number validation. Cannot view dashboards.
+Can submit through public deliverable links without account registration. Student Number is used for class-record lookup and auto-fill when possible, but unmatched Student Numbers do not block submission by themselves. Cannot view dashboards.
 
 ### Student With Account
 
@@ -625,4 +625,3 @@ Production-like profile:
 - Exact Sheet tab/column format from Sir's final class record.
 - Exact AI short columns and long report template.
 - Whether email notifications are added after in-app notifications.
-

@@ -12,7 +12,7 @@ The real pain is that Sir Ralph handles many capstone classes largely by himself
 
 CapVault V2 should be Google-first and workflow-first.
 
-Students should be able to submit through generated deliverable links that feel like Google Forms. A student account can exist, but it must be optional. Basic submission should only require identity validation against the class record, such as Student Number plus optional email confirmation.
+Students should be able to submit through generated deliverable links that feel like Google Forms. A student account can exist, but it must be optional. Basic anonymous submission should use Student Number for class-record lookup and auto-fill when possible, but strict Student Number validation/locking belongs to optional account registration.
 
 Sir Ralph, advisers, and teachers need focused monitoring and review views. Student management should be minimal. The priority is fast submission, automatic organization, AI triage, and clear progress visibility.
 
@@ -45,8 +45,8 @@ Recommended flow:
 3. CapVault generates a submission link for that deliverable.
 4. Student opens the link without needing a full account.
 5. Student enters Student Number.
-6. CapVault validates the Student Number against the class record.
-7. CapVault shows the matched name, team code, adviser, and section.
+6. CapVault attempts to match the Student Number against the class record.
+7. If matched, CapVault shows the matched name, team code, adviser, and section. If unmatched, CapVault can still accept the submission and flag it for staff review.
 8. Student submits Google Drive links, GitHub links, or notes depending on the deliverable.
 9. CapVault writes the response to Google Sheets.
 10. CapVault accepts the submission immediately instead of blocking the student at the deadline moment.
@@ -84,7 +84,7 @@ The current intended direction is a CapVault-owned form that looks and behaves l
 - Students do not upload files directly to CapVault.
 - Students submit Google Drive links, repository links, presentation links, and notes.
 - Student login is not required for the basic submission flow.
-- Student identity is validated against the class record, usually through Student Number.
+- Student Number is used for class-record lookup during anonymous submission, not as a hard identity gate.
 - CapVault should run a fast pre-submit check when possible: valid URL, Drive link shape, and quick access check through Google Drive API.
 - CapVault can block clearly invalid submissions such as empty required link fields, malformed URLs, or non-Drive links where a Drive link is required.
 - If deeper checks are slow or inconclusive, CapVault should still accept the attempt and finish validation after submission.
@@ -471,7 +471,8 @@ Recommended dashboard behavior:
 - Prioritize in-app dashboard notifications first; email notifications are lower priority and can come later.
 - Use cheap automatic checks for every submission, but control full AI evaluation through Sir/adviser action, scheduling, or quota.
 - Full AI evaluation should be manually triggered from Sir's side by default.
-- Validate students against the class record.
+- Use Student Number to match anonymous submissions to the class record when possible.
+- Strict Student Number validation and locking applies to optional account registration, not basic anonymous submission.
 - Treat Drive links as anyone-with-link to minimize submission friction.
 - PDF-required deliverables should freeze the submitted document at the submission timestamp by requiring actual PDF links.
 - Editable Google Docs/Slides/Sheets links should be blocked for PDF-required deliverables.
