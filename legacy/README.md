@@ -6,6 +6,8 @@ This folder contains preserved implementations that should not be treated as the
 
 Original CapVault portal-style implementation.
 
+The original V1 SRS/SDD markdown and PDF files are preserved in `legacy/v1-app/docs/`.
+
 Use it only for reference:
 
 - Google Sheets/class record parsing ideas.
@@ -14,4 +16,3 @@ Use it only for reference:
 - UI/status ideas that still fit the V2 workflow.
 
 Do not continue V2 development inside this folder unless explicitly restoring or reviewing legacy behavior.
-
