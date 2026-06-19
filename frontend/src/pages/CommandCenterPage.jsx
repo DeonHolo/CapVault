@@ -1,96 +1,150 @@
-import { Archive, ClipboardText, FilePdf, ListChecks, WarningCircle } from '@phosphor-icons/react';
+import { Archive, ArrowSquareOut, ClipboardText, FilePdf, Sparkle, WarningCircle } from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
-import { Button, DataTable, PageHeader, StatusBadge } from '../components/ui.jsx';
+import { Button, DataTable, EmptyState, PageHeader, StatusBadge } from '../components/ui.jsx';
 import { useWorkflow } from '../app/WorkflowContext.jsx';
-import { findStudent, formatDateTime, getDeliverable } from '../lib/workflow.js';
+import { findStudent, firstSubmissionLink, formatDateTime, getDeliverable, getIdentityStudents, isAiReportCurrent, makeDriveViewUrl } from '../lib/workflow.js';
 
 export function CommandCenterPage() {
-  const { state, triggerAiEvaluation, markAccepted, archiveAttempt } = useWorkflow();
-  const attention = state.attempts.filter((attempt) => attempt.flags.some((flag) => ['Template-like', 'Unmatched Student Number', 'Too Short'].includes(flag)) || attempt.reviewStatus === 'Needs Review');
-  const accepted = state.attempts.filter((attempt) => attempt.reviewStatus === 'Accepted' && attempt.archiveStatus !== 'Archived');
-  const missingPdfIssues = state.attempts.filter((attempt) => attempt.flags.includes('Not PDF') || attempt.flags.includes('Editable Link')).length;
+  const { state, triggerAiEvaluation, archiveAttempt } = useWorkflow();
+  const identityStudents = getIdentityStudents(state.students);
+  const attention = buildAttentionQueue(state);
+  const accepted = state.attempts.filter((response) => response.reviewStatus === 'Accepted' && response.archiveStatus !== 'Archived');
+  const missing = Math.max(0, state.deliverables.filter((item) => item.status !== 'Unpublished').length * identityStudents.length - state.attempts.length);
+
+  function runAiReview(response) {
+    if (!isAiReportCurrent(response) || window.confirm('This response already has a current AI Review. Run it again?')) {
+      triggerAiEvaluation(response.id);
+    }
+  }
 
   return (
     <div className="page-stack">
       <PageHeader
-        title="Command Center"
-        description="Sir's working view for submission attempts, tracker writeback, AI triage, and final archive readiness."
+        title="Today's Work"
+        description="Prioritized submission, file-check, tracker, and archive work for Sir Ralph."
         actions={<Link className="btn btn-primary btn-md" to="/forms"><ClipboardText weight="regular" /><span>Publish form</span></Link>}
       />
 
       <section className="metric-grid">
-        <Metric icon={ClipboardText} label="Published forms" value={state.deliverables.length} />
-        <Metric icon={FilePdf} label="Submission attempts" value={state.attempts.length} />
-        <Metric icon={WarningCircle} label="Needs attention" value={attention.length + missingPdfIssues} />
-        <Metric icon={Archive} label="Archived finals" value={state.archives.length} />
-      </section>
-
-      <section className="split-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <div>
-              <h2>Attention queue</h2>
-              <p>Items that save Sir from opening links one by one.</p>
-            </div>
-            <Link className="text-link" to="/review">Open review</Link>
-          </div>
-          <DataTable columns={['Student', 'Deliverable', 'Flags', 'Action']} minWidth={720}>
-            {attention.slice(0, 6).map((attempt) => {
-              const student = findStudent(state.students, attempt.studentNumber);
-              const deliverable = getDeliverable(state, attempt.deliverableId);
-              return (
-                <tr key={attempt.id}>
-                  <td><strong>{student?.name || attempt.studentNumber}</strong><small>{student?.teamCode || 'Unmatched'}</small></td>
-                  <td>{deliverable?.shortTitle}</td>
-                  <td><div className="status-row">{attempt.flags.map((flag) => <StatusBadge key={flag} status={flag} />)}</div></td>
-                  <td><Button size="sm" variant="secondary" icon={ListChecks} onClick={() => triggerAiEvaluation(attempt.id)}>Run AI</Button></td>
-                </tr>
-              );
-            })}
-          </DataTable>
-        </div>
-
-        <div className="panel">
-          <div className="panel-header">
-            <div>
-              <h2>Archive candidates</h2>
-              <p>Only final accepted PDFs should be captured as independent bytes.</p>
-            </div>
-            <Link className="text-link" to="/archive">Archive index</Link>
-          </div>
-          <div className="notice-list">
-            {accepted.length ? accepted.map((attempt) => {
-              const student = findStudent(state.students, attempt.studentNumber);
-              const deliverable = getDeliverable(state, attempt.deliverableId);
-              return (
-                <div className="notice-row" key={attempt.id}>
-                  <div><strong>{deliverable?.shortTitle}</strong><span>{student?.teamCode}</span></div>
-                  <Button size="sm" variant="primary" icon={Archive} onClick={() => archiveAttempt(attempt.id)}>Archive final</Button>
-                </div>
-              );
-            }) : <p className="muted-copy">No accepted final submissions are waiting for archive.</p>}
-          </div>
-        </div>
+        <Metric icon={ClipboardText} label="Open forms" value={state.deliverables.filter((item) => item.status !== 'Unpublished').length} />
+        <Metric icon={FilePdf} label="Current responses" value={state.attempts.length} />
+        <Metric icon={WarningCircle} label="Needs action" value={attention.length} />
+        <Metric icon={Archive} label="Archive candidates" value={accepted.length} />
       </section>
 
       <section className="panel">
         <div className="panel-header">
           <div>
-            <h2>Recent activity</h2>
-            <p>Background work that would also write to the Activity Log sheet.</p>
+            <h2>Action queue</h2>
+            <p>Rows are ordered by work that saves the most checking time first.</p>
           </div>
+          <Link className="text-link" to="/review">Open full review</Link>
         </div>
-        <div className="activity-list">
-          {state.activity.slice(0, 8).map((item) => (
-            <div className="activity-row" key={item.id}>
-              <span>{formatDateTime(item.at)}</span>
-              <strong>{item.text}</strong>
+        {attention.length ? (
+          <DataTable columns={['Priority', 'Student', 'Deliverable', 'Issue', 'Updated', 'Actions']} minWidth={980} className="today-work-table">
+            {attention.slice(0, 12).map((item) => {
+              const fileLink = firstSubmissionLink(item.response.values);
+              return (
+                <tr key={item.response.id}>
+                  <td><StatusBadge status={item.priority} /></td>
+                  <td><strong>{item.student?.name || item.response.studentName}</strong><small>{item.student?.teamCode || item.response.teamCode}</small></td>
+                  <td>{item.deliverable?.shortTitle || 'Deliverable'}</td>
+                  <td className="summary-cell">{item.issue}</td>
+                  <td>{formatDateTime(item.response.updatedAt || item.response.submittedAt)}</td>
+                  <td>
+                    <div className="row-action-group">
+                      {fileLink ? <a className="btn btn-secondary btn-sm" href={makeDriveViewUrl(fileLink)} target="_blank" rel="noreferrer"><ArrowSquareOut weight="regular" /><span>Open file link</span></a> : null}
+                      <Button size="sm" variant="secondary" icon={Sparkle} onClick={() => runAiReview(item.response)}>
+                        {isAiReportCurrent(item.response) ? 'View AI' : 'AI Review'}
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </DataTable>
+        ) : (
+          <EmptyState title="No urgent work right now" description="Review is clear based on current responses and file checks." />
+        )}
+      </section>
+
+      <section className="split-grid">
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <h2>Archive candidates</h2>
+              <p>Accepted final PDFs waiting for a preserved copy.</p>
             </div>
-          ))}
-        </div>
+            <Link className="text-link" to="/archive">Archive index</Link>
+          </div>
+          <div className="compact-row-list">
+            {accepted.length ? accepted.map((response) => {
+              const student = findStudent(state.students, response.studentNumber);
+              const deliverable = getDeliverable(state, response.deliverableId);
+              return (
+                <div className="compact-action-row" key={response.id}>
+                  <div><strong>{deliverable?.shortTitle}</strong><span>{student?.teamCode} | {student?.name || response.studentName}</span></div>
+                  <Button size="sm" variant="primary" icon={Archive} onClick={() => archiveAttempt(response.id)}>Archive final</Button>
+                </div>
+              );
+            }) : <p className="muted-copy">No accepted final responses are waiting for archive.</p>}
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <h2>Workspace signals</h2>
+              <p>Import and setup items that can affect form and tracker quality.</p>
+            </div>
+            <Link className="text-link" to="/workspace">Workspace setup</Link>
+          </div>
+          <div className="compact-row-list">
+            <div className="compact-action-row">
+              <div><strong>Missing responses</strong><span>{missing} based on open forms and Team Formation identities.</span></div>
+              <StatusBadge status={missing ? 'Needs Attention' : 'Ready'} />
+            </div>
+            <div className="compact-action-row">
+              <div><strong>Identity source</strong><span>{state.classRecord.sources?.teamFormation?.name || 'Team Formation'}</span></div>
+              <StatusBadge status={state.classRecord.sources?.teamFormation?.status || 'Not connected'} />
+            </div>
+            <div className="compact-action-row">
+              <div><strong>Project metadata</strong><span>{state.projectMetadata?.length || 0} groups loaded.</span></div>
+              <StatusBadge status={state.projectMetadata?.length ? 'Ready' : 'Needs Attention'} />
+            </div>
+          </div>
+        </section>
       </section>
     </div>
   );
+}
+
+function buildAttentionQueue(state) {
+  return state.attempts
+    .map((response) => {
+      const student = findStudent(state.students, response.studentNumber);
+      const deliverable = getDeliverable(state, response.deliverableId);
+      const flags = response.flags || [];
+      const issue = flags.includes('Template-like')
+        ? 'Submission appears close to the provided template.'
+        : flags.includes('Too Short')
+          ? 'Extracted content appears too short.'
+          : !isAiReportCurrent(response)
+            ? 'AI Review has not been run for the latest response.'
+            : response.reviewStatus === 'Needs Review'
+              ? 'Review status still needs a decision.'
+              : '';
+      if (!issue) return null;
+      return {
+        response,
+        student,
+        deliverable,
+        issue,
+        priority: flags.includes('Template-like') || flags.includes('Too Short') ? 'Needs Review' : 'Unchecked'
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => Number(isAiReportCurrent(a.response)) - Number(isAiReportCurrent(b.response)));
 }
 
 function Metric({ icon: Icon, label, value }) {

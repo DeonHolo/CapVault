@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: ${CAPVAULT_DB_URL:jdbc:postgresql://localhost:5432/capvault}
+    driver-class-name: org.postgresql.Driver
+    username: ${CAPVAULT_DB_USERNAME:capvault}
+    password: ${CAPVAULT_DB_PASSWORD:capvault}
+
+logging:
+  level:
+    com.capvault.backend: INFO

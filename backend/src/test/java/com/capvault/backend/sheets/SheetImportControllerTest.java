@@ -1,0 +1,193 @@
+package com.capvault.backend.sheets;
+
+import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.capvault.backend.project.ProjectMetadataRepository;
+import com.capvault.backend.student.StudentRecordRepository;
+import com.capvault.backend.tracker.TrackerCellRepository;
+import com.capvault.backend.tracker.TrackerColumnRepository;
+import com.capvault.backend.tracker.TrackerRowRepository;
+import com.capvault.backend.tracker.TrackerWritebackRepository;
+import com.capvault.backend.workspace.WorkspaceSourceRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+class SheetImportControllerTest {
+
+    private static final String TEAM_FORMATION_CSV = """
+        Team Formation Sheet
+        Student Number,Name of Student,Team Formation,Member #,Section,CIT Email
+        20-0649-750,"TAGHOY, RON LUIGI F.",2526-sem2-it332-41,1,IT332,ron.luigi@cit.edu
+        23-2250-144,"BARANGAN, MARK LORENZ L.",2526-sem2-it332-07,5,IT332,mark.lorenz@cit.edu
+        """;
+
+    private static final String TRACKER_CSV = """
+        ClassRec SEM2 2025-26 : IT332 Tracker
+        NAME OF STUDENT,TEAM FORMATION,MEMBER#,ProbExploration,SRS,SDD
+        ,,,"February 14, 2026","April 18, 2026","April 25, 2026"
+        "TAGHOY, RON LUIGI F.",2526-sem2-it332-41,1,0,,21
+        "BARANGAN, MARK LORENZ L.",2526-sem2-it332-07,5,1,51,51
+        """;
+
+    private static final String PROJECT_MONITOR_CSV = """
+        SoftwareProjectMonitoring
+        GROUP CODE,PROJECT TITLE,SOFTWARE NAME,DESCRIPTION,PROPOSAL REMARKS,DEMO COMMENTS,STATUS/ADVISER,CATEGORY
+        2526-sem2-it332-41,CapVault,AcaVault,Google-first submission monitor,Approved pending revisions,Focus on review queue,Sir Ralph Laviste,Academic Capstone
+        """;
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private SheetCsvClient sheetCsvClient;
+
+    @Autowired
+    private WorkspaceSourceRepository workspaceSourceRepository;
+
+    @Autowired
+    private SheetImportRunRepository sheetImportRunRepository;
+
+    @Autowired
+    private StudentRecordRepository studentRecordRepository;
+
+    @Autowired
+    private ProjectMetadataRepository projectMetadataRepository;
+
+    @Autowired
+    private TrackerColumnRepository trackerColumnRepository;
+
+    @Autowired
+    private TrackerRowRepository trackerRowRepository;
+
+    @Autowired
+    private TrackerCellRepository trackerCellRepository;
+
+    @Autowired
+    private TrackerWritebackRepository trackerWritebackRepository;
+
+    @BeforeEach
+    void clearImportedState() {
+        trackerWritebackRepository.deleteAll();
+        trackerCellRepository.deleteAll();
+        trackerRowRepository.deleteAll();
+        trackerColumnRepository.deleteAll();
+        projectMetadataRepository.deleteAll();
+        studentRecordRepository.deleteAll();
+        sheetImportRunRepository.deleteAll();
+        workspaceSourceRepository.deleteAll();
+    }
+
+    @Test
+    void importsTeamFormationAndExposesStudentIds() throws Exception {
+        when(sheetCsvClient.fetchCsv(anyString())).thenReturn(TEAM_FORMATION_CSV);
+
+        mockMvc.perform(post("/api/sheets/import/TEAM_FORMATION")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "sheetUrl": "https://docs.google.com/spreadsheets/d/team-formation/edit",
+                      "displayName": "Team Formation"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.studentsFound").value(2))
+            .andExpect(jsonPath("$.officialIdsFound").value(2))
+            .andExpect(jsonPath("$.warnings", hasSize(0)));
+
+        mockMvc.perform(get("/api/students"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[?(@.studentNumber == '20-0649-750')]").exists())
+            .andExpect(jsonPath("$[?(@.institutionalEmail == 'ron.luigi@cit.edu')]").exists());
+    }
+
+    @Test
+    void importsTrackerRowsDeadlineSuggestionsAndWritesLocalTrackerValue() throws Exception {
+        when(sheetCsvClient.fetchCsv(anyString())).thenReturn(TEAM_FORMATION_CSV, TRACKER_CSV);
+
+        importTeamFormation();
+
+        mockMvc.perform(post("/api/sheets/import/TRACKER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "sheetUrl": "https://docs.google.com/spreadsheets/d/tracker/edit?gid=1971664293",
+                      "displayName": "IT332 Tracker"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.rowsFound").value(2))
+            .andExpect(jsonPath("$.columnsFound").value(3))
+            .andExpect(jsonPath("$.deadlineSuggestions", hasSize(3)));
+
+        mockMvc.perform(get("/api/tracker/rows"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[?(@.studentNumber == '20-0649-750')]").exists())
+            .andExpect(jsonPath("$[?(@.studentName == 'TAGHOY, RON LUIGI F.')]").exists());
+
+        mockMvc.perform(post("/api/tracker/writebacks")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "studentNumber": "20-0649-750",
+                      "teamCode": "2526-sem2-it332-41",
+                      "memberNumber": "1",
+                      "trackerColumnKey": "SRS",
+                      "daysLate": 0,
+                      "writeToGoogleSheet": true
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("PENDING_GOOGLE_CREDENTIALS"))
+            .andExpect(jsonPath("$.targetA1Range").value("'IT332 Tracker'!E4"));
+    }
+
+    @Test
+    void importsSoftwareProjectMonitorMetadata() throws Exception {
+        when(sheetCsvClient.fetchCsv(anyString())).thenReturn(PROJECT_MONITOR_CSV);
+
+        mockMvc.perform(post("/api/sheets/import/PROJECT_MONITOR")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "sheetUrl": "https://docs.google.com/spreadsheets/d/project-monitor/edit",
+                      "displayName": "SoftwareProjectMonitoring"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.groupsFound").value(1));
+
+        mockMvc.perform(get("/api/projects"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].groupCode").value("2526-sem2-it332-41"))
+            .andExpect(jsonPath("$[0].projectTitle").value("CapVault"))
+            .andExpect(jsonPath("$[0].adviserName").value("Sir Ralph Laviste"));
+    }
+
+    private void importTeamFormation() throws Exception {
+        mockMvc.perform(post("/api/sheets/import/TEAM_FORMATION")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "sheetUrl": "https://docs.google.com/spreadsheets/d/team-formation/edit",
+                      "displayName": "Team Formation"
+                    }
+                    """))
+            .andExpect(status().isOk());
+    }
+}

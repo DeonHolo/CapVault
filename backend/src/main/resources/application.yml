@@ -1,0 +1,27 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: capvault-backend
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  profiles:
+    default: local
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+capvault:
+  cors:
+    allowed-origins:
+      - http://127.0.0.1:5173
+      - http://localhost:5173
+  google:
+    sheets:
+      enabled: ${CAPVAULT_GOOGLE_SHEETS_ENABLED:false}
+      service-account-json-path: ${CAPVAULT_GOOGLE_SERVICE_ACCOUNT_JSON:}
+      application-name: ${CAPVAULT_GOOGLE_APPLICATION_NAME:CapVault V2}

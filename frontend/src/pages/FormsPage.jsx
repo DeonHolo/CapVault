@@ -1,97 +1,263 @@
 import { useMemo, useState } from 'react';
-import { Copy, LinkSimple, PlusCircle } from '@phosphor-icons/react';
+import { CheckCircle, LinkSimple, PencilSimple, PlusCircle, Trash } from '@phosphor-icons/react';
 import { Button, DataTable, Field, PageHeader, StatusBadge } from '../components/ui.jsx';
 import { useWorkflow } from '../app/WorkflowContext.jsx';
-import { formatDate } from '../lib/workflow.js';
+import { formatDate, formatTime, getActiveTrackerColumns, getTrackerColumn, slugify, sortDeliverables } from '../lib/workflow.js';
 
-const defaultFields = [
-  { id: 'documentPdf', label: 'PDF Drive Link', type: 'drive', required: true, pdfRequired: true },
-  { id: 'notes', label: 'Submission note', type: 'textarea', required: false, pdfRequired: false }
-];
+const pdfField = { id: 'documentPdf', label: 'PDF Drive Link', type: 'drive', required: true, pdfRequired: true };
+const linkField = { id: 'primaryLink', label: 'Submission Link', type: 'url', required: true, pdfRequired: false };
+
+function todayAt2359() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}T23:59`;
+}
+
+function splitLocalDateTime(value) {
+  const clean = String(value || todayAt2359()).slice(0, 16);
+  const [date = '', time = '23:59'] = clean.split('T');
+  return { date, time };
+}
+
+function joinLocalDateTime(date, time) {
+  return `${date || splitLocalDateTime().date}T${time || '23:59'}`;
+}
+
+function makeDefaultForm(column = 'SRS') {
+  return {
+    id: '',
+    title: `${column} Submission`,
+    dueAt: todayAt2359(),
+    trackerColumn: column,
+    instructions: `Submit your ${column} as a PDF Drive file.`,
+    pdfRequired: true,
+    status: 'Published'
+  };
+}
 
 export function FormsPage() {
-  const { state, publishDeliverable } = useWorkflow();
-  const [form, setForm] = useState({
-    title: 'Week 11: Revised SRS',
-    shortTitle: 'Revised SRS',
-    dueAt: '2026-05-02T23:59',
-    trackerColumn: 'SRS',
-    instructions: 'Submit the revised SRS as a PDF Drive file. Editable document links are blocked.',
-    pdfRequired: true
-  });
-  const previewSlug = useMemo(() => form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''), [form.title]);
+  const { state, publishDeliverable, removeDeliverable } = useWorkflow();
+  const activeColumns = getActiveTrackerColumns(state);
+  const firstColumn = activeColumns[0]?.key || activeColumns[0]?.label || 'SRS';
+  const [form, setForm] = useState(makeDefaultForm(firstColumn));
+  const [editing, setEditing] = useState(null);
+  const [copied, setCopied] = useState('');
+  const selectedColumn = getTrackerColumn(state, form.trackerColumn);
+  const selectedExisting = state.deliverables.find((item) => item.trackerColumn === form.trackerColumn);
+  const orderedDeliverables = useMemo(() => sortDeliverables(state, state.deliverables), [state]);
+  const previewSlug = useMemo(() => slugify(form.title || `${form.trackerColumn} Submission`), [form.title, form.trackerColumn]);
+
+  function updateDeliverable(columnKey, targetSetter = setForm) {
+    const column = getTrackerColumn(state, columnKey);
+    const label = column?.label || columnKey;
+    targetSetter((current) => ({
+      ...current,
+      trackerColumn: column?.key || columnKey,
+      title: current.id ? current.title : `${label} Submission`,
+      instructions: column?.pdfRequired ? `Submit your ${label} as a PDF Drive file.` : `Submit the required link for ${label}.`,
+      pdfRequired: column?.pdfRequired ?? current.pdfRequired
+    }));
+  }
+
+  function buildPayload(source) {
+    const column = getTrackerColumn(state, source.trackerColumn);
+    const shortTitle = column?.label || source.trackerColumn;
+    return {
+      ...source,
+      title: source.title || `${shortTitle} Submission`,
+      shortTitle,
+      dueAt: `${String(source.dueAt || todayAt2359()).slice(0, 16)}:00+08:00`,
+      audience: 'Students',
+      status: 'Published',
+      fields: source.pdfRequired ? [pdfField] : [linkField]
+    };
+  }
 
   function submit(event) {
     event.preventDefault();
-    publishDeliverable({
-      ...form,
-      dueAt: `${form.dueAt}:00+08:00`,
-      audience: 'IT332 students',
-      fields: form.pdfRequired ? defaultFields : [
-        { id: 'primaryLink', label: 'Submission link', type: 'url', required: true, pdfRequired: false },
-        { id: 'notes', label: 'Submission note', type: 'textarea', required: false, pdfRequired: false }
-      ]
+    publishDeliverable(buildPayload(form));
+    setForm(makeDefaultForm(selectedColumn?.key || selectedColumn?.label || firstColumn));
+  }
+
+  function openEditor(item) {
+    setEditing({
+      id: item.id,
+      title: item.title,
+      dueAt: item.dueAt.slice(0, 16),
+      trackerColumn: item.trackerColumn,
+      instructions: item.instructions,
+      pdfRequired: item.fields.some((field) => field.pdfRequired),
+      status: item.status || 'Published'
     });
+  }
+
+  function saveEdit(event) {
+    event.preventDefault();
+    publishDeliverable(buildPayload(editing));
+    setEditing(null);
+  }
+
+  async function copyLink(item) {
+    const path = `${window.location.origin}/submit/${item.slug}`;
+    await navigator.clipboard?.writeText(path);
+    setCopied(item.id);
+    window.setTimeout(() => setCopied(''), 1600);
+  }
+
+  function confirmRemove(item) {
+    if (window.confirm(`Unpublish ${item.shortTitle}? Existing responses stay connected to this deliverable.`)) {
+      removeDeliverable(item.id);
+    }
   }
 
   return (
     <div className="page-stack">
-      <PageHeader title="Form Publisher" description="Create deliverable-specific links that behave like focused Google Forms but write back to Sheets and tracker rules." />
-      <section className="split-grid wide-left">
-        <form className="panel form-grid" onSubmit={submit}>
+      <PageHeader title="Form Publisher" description="Publish one student submission link per deliverable from the connected class record." />
+
+      <section className="panel">
+        <form className="form-grid" onSubmit={submit}>
           <div className="panel-header">
             <div>
-              <h2>Create or update deliverable form</h2>
-              <p>Use templates for speed, then edit field rules before publishing.</p>
+              <h2>{selectedExisting ? 'Update a deliverable form' : 'Publish a deliverable form'}</h2>
+              <p>Choose a mapped deliverable, confirm the deadline, then share the generated link.</p>
             </div>
           </div>
-          <Field label="Form title" required><input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></Field>
           <div className="two-col">
-            <Field label="Short label" required><input value={form.shortTitle} onChange={(event) => setForm({ ...form, shortTitle: event.target.value })} /></Field>
-            <Field label="Due date" required><input type="datetime-local" value={form.dueAt} onChange={(event) => setForm({ ...form, dueAt: event.target.value })} /></Field>
+            <Field label="Deliverable" helper="Loaded from the connected Tracker columns." required>
+              <select value={form.trackerColumn} onChange={(event) => updateDeliverable(event.target.value)}>
+                {activeColumns.map((column) => <option key={column.id} value={column.key}>{column.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Due date" required>
+              <DateTimeFields value={form.dueAt} onChange={(dueAt) => setForm({ ...form, dueAt })} />
+            </Field>
           </div>
           <div className="two-col">
-            <Field label="Tracker column" required>
-              <select value={form.trackerColumn} onChange={(event) => setForm({ ...form, trackerColumn: event.target.value })}>
-                {['ProbExploration', 'Convergence', 'RRL', 'Project Proposal', 'SRS', 'SDD', 'SourceCode', 'DEMO'].map((column) => <option key={column}>{column}</option>)}
-              </select>
+            <Field label="Form title" required>
+              <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
             </Field>
             <Field label="Document rule">
               <select value={form.pdfRequired ? 'pdf' : 'link'} onChange={(event) => setForm({ ...form, pdfRequired: event.target.value === 'pdf' })}>
-                <option value="pdf">Strict PDF Drive link</option>
-                <option value="link">General link fields</option>
+                <option value="pdf">PDF Drive link only</option>
+                <option value="link">General link field</option>
               </select>
             </Field>
           </div>
-          <Field label="Instructions"><textarea value={form.instructions} onChange={(event) => setForm({ ...form, instructions: event.target.value })} rows={4} /></Field>
-          <div className="form-preview">
+          <Field label="Instructions">
+            <textarea value={form.instructions} onChange={(event) => setForm({ ...form, instructions: event.target.value })} rows={3} />
+          </Field>
+          <div className="form-preview compact-preview">
             <span>Generated link</span>
             <strong>/submit/{previewSlug}</strong>
           </div>
-          <Button icon={PlusCircle}>Publish form</Button>
-        </form>
-
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <h2>Published forms</h2>
-              <p>These links can be sent directly to students.</p>
-            </div>
+          <div className="button-row">
+            <Button icon={selectedExisting ? CheckCircle : PlusCircle}>{selectedExisting ? 'Update existing form' : 'Publish form'}</Button>
           </div>
-          <DataTable columns={['Deliverable', 'Due', 'Rule', 'Link']} minWidth={680}>
-            {state.deliverables.map((item) => (
-              <tr key={item.id}>
-                <td><strong>{item.title}</strong><small>{item.trackerColumn}</small></td>
-                <td>{formatDate(item.dueAt)}</td>
-                <td><StatusBadge status={item.fields.some((field) => field.pdfRequired) ? 'PDF required' : 'Link fields'} /></td>
-                <td><a className="copy-link" href={`/submit/${item.slug}`}><LinkSimple weight="regular" /> /submit/{item.slug}</a></td>
-              </tr>
-            ))}
-          </DataTable>
-          <div className="inline-note"><Copy weight="regular" /> Copy a form link and send it like Sir's current deliverable links page.</div>
-        </section>
+        </form>
       </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <h2>Published forms</h2>
+            <p>Each deliverable can have only one form. Unpublishing closes the public link but keeps responses.</p>
+          </div>
+        </div>
+        <DataTable columns={['Deliverable', 'Due', 'Rule', 'Link', 'Status', 'Actions']} minWidth={920} className="forms-table-wrap">
+          {orderedDeliverables.map((item) => {
+            const isPdf = item.fields.some((field) => field.pdfRequired);
+            return (
+              <tr key={item.id}>
+                <td><strong>{item.shortTitle}</strong><small>{item.title}</small></td>
+                <td><strong className="due-inline">{formatDate(item.dueAt)} | {formatTime(item.dueAt)}</strong></td>
+                <td><StatusBadge status={isPdf ? 'PDF required' : 'Link fields'} /></td>
+                <td>
+                  <div className="form-link-cell">
+                    <button className="icon-copy-button" type="button" onClick={() => copyLink(item)} aria-label={`Copy ${item.shortTitle} form link`} title="Copy link">
+                      <LinkSimple weight="regular" />
+                    </button>
+                    <a className="form-link-url" href={`/submit/${item.slug}`} target="_blank" rel="noreferrer">/submit/{item.slug}</a>
+                  </div>
+                  {copied === item.id ? <small>Copied</small> : null}
+                </td>
+                <td><StatusBadge status={item.status || 'Published'} /></td>
+                <td>
+                  <div className="row-action-group">
+                    <Button type="button" size="sm" variant="secondary" icon={PencilSimple} onClick={() => openEditor(item)}>Edit</Button>
+                    {item.status === 'Unpublished' ? (
+                      <Button type="button" size="sm" variant="primary" icon={CheckCircle} onClick={() => publishDeliverable({ ...item, status: 'Published' })}>Republish</Button>
+                    ) : (
+                      <Button type="button" size="sm" variant="secondary" icon={Trash} onClick={() => confirmRemove(item)}>Unpublish</Button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </DataTable>
+      </section>
+
+      {editing ? (
+        <div className="modal-backdrop" role="presentation">
+          <form className="modal-panel form-grid" onSubmit={saveEdit} role="dialog" aria-modal="true" aria-label="Edit published form">
+            <div className="panel-header">
+              <div>
+                <h2>Edit form</h2>
+                <p>Changes update the existing deliverable link and preserve all responses.</p>
+              </div>
+            </div>
+            <Field label="Deliverable" required>
+              <select value={editing.trackerColumn} onChange={(event) => updateDeliverable(event.target.value, setEditing)}>
+                {activeColumns.map((column) => <option key={column.id} value={column.key}>{column.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Form title" required>
+              <input value={editing.title} onChange={(event) => setEditing({ ...editing, title: event.target.value })} />
+            </Field>
+            <div className="two-col">
+              <Field label="Due date" required>
+                <DateTimeFields value={editing.dueAt} onChange={(dueAt) => setEditing({ ...editing, dueAt })} />
+              </Field>
+              <Field label="Document rule">
+                <select value={editing.pdfRequired ? 'pdf' : 'link'} onChange={(event) => setEditing({ ...editing, pdfRequired: event.target.value === 'pdf' })}>
+                  <option value="pdf">PDF Drive link only</option>
+                  <option value="link">General link field</option>
+                </select>
+              </Field>
+            </div>
+            <Field label="Instructions">
+              <textarea value={editing.instructions} onChange={(event) => setEditing({ ...editing, instructions: event.target.value })} rows={3} />
+            </Field>
+            <div className="button-row">
+              <Button icon={CheckCircle}>Save changes</Button>
+              <Button type="button" variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }
 
+function DateTimeFields({ value, onChange }) {
+  const parts = splitLocalDateTime(value);
+  return (
+    <div className="date-time-pair">
+      <input
+        aria-label="Due date"
+        type="date"
+        value={parts.date}
+        onChange={(event) => onChange(joinLocalDateTime(event.target.value, parts.time))}
+      />
+      <span aria-hidden="true">|</span>
+      <input
+        aria-label="Due time"
+        type="time"
+        value={parts.time}
+        onChange={(event) => onChange(joinLocalDateTime(parts.date, event.target.value))}
+      />
+    </div>
+  );
+}
